@@ -67,6 +67,16 @@ function terminateProcesses {
     fi
 }
 
+function cleanup {
+    if [ -n "$1" ]; then
+        echo "Aborted by $1"
+    elif [ $status -ne 0 ]; then
+        echo "Failure (status $status)"
+    else
+        echo "Success"
+    fi
+}
+
 # Start up the opensearch and performance analyzer agent processes.
 # When either of them halts, this script exits, or we receive a SIGTERM or SIGINT signal then we want to kill both these processes.
 function runOpensearch {
@@ -102,7 +112,10 @@ function runOpensearch {
     set -m
 
     # Make sure we terminate the child processes in the event of us received TERM (e.g. "docker container stop"), INT (e.g. ctrl-C), EXIT (this script terminates for an unexpected reason), or CHLD (one of the processes terminated unexpectedly)
-    trap terminateProcesses TERM INT EXIT CHLD
+    trap 'trap - TERM; cleanup TERM; kill -TERM $$' TERM
+    trap 'trap - INT; cleanup INT; kill -INT $$' INT
+    trap 'status=$?; cleanup; exit $status' EXIT
+    trap 'status=$?; cleanup; exit 1' CHLD
 
     # Start opensearch
     "$@" "${opensearch_opts[@]}" &
